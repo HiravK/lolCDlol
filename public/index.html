@@ -1,0 +1,358 @@
+
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+.root{padding:1rem 0;font-family:var(--font-sans)}
+.top-bar{display:flex;gap:10px;align-items:center;margin-bottom:1.25rem;flex-wrap:wrap}
+.yr-label{font-size:13px;color:var(--color-text-secondary);white-space:nowrap}
+.yr-input{font-size:20px;font-weight:500;width:110px;padding:7px 12px;border-radius:8px;border:1px solid var(--color-border-secondary);background:var(--color-background-primary);color:var(--color-text-primary);font-family:var(--font-sans);text-align:center}
+.yr-input:focus{outline:none;border-color:#378ADD;box-shadow:0 0 0 2px #E6F1FB}
+.go-btn{padding:8px 20px;border-radius:8px;border:1px solid var(--color-border-secondary);background:var(--color-background-secondary);color:var(--color-text-primary);font-size:13px;cursor:pointer;font-family:var(--font-sans)}
+.go-btn:hover{background:var(--color-background-tertiary)}
+.result-pill{display:inline-flex;align-items:center;padding:7px 16px;border-radius:20px;font-size:14px;font-weight:500}
+.r-leap{background:#EAF3DE;color:#27500A}
+.r-no{background:#FCEBEB;color:#791F1F}
+.r-wait{background:var(--color-background-secondary);color:var(--color-text-secondary);font-size:12px;font-weight:400}
+.progress-bar{display:flex;gap:0;margin-bottom:1rem;border-radius:8px;overflow:hidden;border:1px solid var(--color-border-tertiary)}
+.pb-step{flex:1;padding:8px 4px;text-align:center;cursor:pointer;background:var(--color-background-primary);border-right:1px solid var(--color-border-tertiary);transition:background 0.12s}
+.pb-step:last-child{border-right:none}
+.pb-step:hover{background:var(--color-background-secondary)}
+.pb-step.active{background:#E6F1FB}
+.pb-num{font-size:9px;color:var(--color-text-secondary);margin-bottom:1px}
+.pb-step.active .pb-num{color:#185FA5}
+.pb-name{font-size:11px;font-weight:500;color:var(--color-text-primary);line-height:1.3}
+.pb-step.active .pb-name{color:#185FA5}
+.phase-card{border:1px solid var(--color-border-tertiary);border-radius:12px;background:var(--color-background-primary);overflow:hidden}
+.phase-header{padding:1rem 1.25rem;border-bottom:1px solid var(--color-border-tertiary);background:var(--color-background-secondary)}
+.phase-title{font-size:16px;font-weight:500;color:var(--color-text-primary);margin-bottom:4px}
+.phase-desc{font-size:13px;color:var(--color-text-secondary);line-height:1.6}
+.phase-body{padding:1rem 1.25rem}
+.section-label{font-size:10px;font-weight:500;color:var(--color-text-secondary);letter-spacing:0.06em;margin-bottom:8px;margin-top:12px}
+.diagram-wrap{margin-bottom:4px}
+.code-block{background:var(--color-background-tertiary);border-radius:8px;padding:12px 14px;font-family:var(--font-mono);font-size:12px;line-height:1.8;color:var(--color-text-primary);white-space:pre;overflow-x:auto;margin-bottom:4px}
+.logic-box{background:var(--color-background-secondary);padding:10px 14px;font-size:13px;color:var(--color-text-secondary);line-height:1.6;border-left:3px solid #378ADD}
+.logic-box strong{font-weight:500;color:var(--color-text-primary)}
+.nav-row{display:flex;justify-content:space-between;align-items:center;margin-top:0.75rem}
+.nav-btn{font-size:12px;padding:6px 16px;border-radius:8px;border:1px solid var(--color-border-tertiary);background:transparent;color:var(--color-text-secondary);cursor:pointer;font-family:var(--font-sans)}
+.nav-btn:disabled{opacity:0.3;cursor:default}
+.nav-btn:not(:disabled):hover{background:var(--color-background-secondary)}
+.step-counter{font-size:12px;color:var(--color-text-secondary)}
+.kw{color:#185FA5;font-weight:500}
+.num{color:#3B6D11}
+.str{color:#854F0B}
+.op{color:#A32D2D}
+.id{color:var(--color-text-primary)}
+.cm{color:var(--color-text-secondary)}
+.ok{color:#3B6D11;font-weight:500}
+.bad{color:#A32D2D;font-weight:500}
+</style>
+
+<div class="root">
+<h2 style="position:absolute;width:1px;height:1px;overflow:hidden">Compiler 6 phases — step by step leap year</h2>
+
+<div class="top-bar">
+  <span class="yr-label">Enter year:</span>
+  <input class="yr-input" type="number" id="yrinput" value="" placeholder="e.g. 2024" min="1" max="9999" oninput="onInput()">
+  <button class="go-btn" onclick="compile()">Compile &amp; run ↗</button>
+  <div id="rpill"><span class="result-pill r-wait">Waiting for input…</span></div>
+</div>
+
+<div class="progress-bar" id="pbar"></div>
+<div class="phase-card" id="pcard"></div>
+
+<div class="nav-row">
+  <button class="nav-btn" id="pbtn" onclick="go(-1)">← Previous</button>
+  <span class="step-counter" id="sctr">Phase 1 of 6</span>
+  <button class="nav-btn" id="nbtn" onclick="go(1)">Next →</button>
+</div>
+</div>
+
+<script>
+let yr=null, cur=0;
+const NAMES=["Lexical analysis","Syntax analysis","Semantic analysis","Intermediate code","Optimisation","Code generation"];
+
+function isLeap(y){return y%4===0&&(y%100!==0||y%400===0)}
+
+function renderPbar(){
+  document.getElementById('pbar').innerHTML=NAMES.map((n,i)=>`<div class="pb-step${i===cur?' active':''}" onclick="jump(${i})"><div class="pb-num">Phase ${i+1}</div><div class="pb-name">${n}</div></div>`).join('');
+}
+
+function renderPill(){
+  const el=document.getElementById('rpill');
+  if(yr===null){el.innerHTML='<span class="result-pill r-wait">Waiting for input…</span>';return}
+  const leap=isLeap(yr);
+  el.innerHTML=`<span class="result-pill ${leap?'r-leap':'r-no'}">${yr} → ${leap?'Leap year':'Not a leap year'}</span>`;
+}
+
+function box(x,y,w,h,fill,stroke,textLines,textSizes,textWeights,textColors){
+  let rects=`<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="8" fill="${fill}" stroke="${stroke}" stroke-width="1"/>`;
+  const cx=x+w/2;
+  if(textLines.length===1){
+    rects+=`<text x="${cx}" y="${y+h/2}" text-anchor="middle" dominant-baseline="central" font-size="${textSizes[0]}" font-weight="${textWeights[0]}" fill="${textColors[0]}">${textLines[0]}</text>`;
+  } else {
+    const gap=h/(textLines.length+1);
+    textLines.forEach((t,i)=>{
+      rects+=`<text x="${cx}" y="${y+gap*(i+1)}" text-anchor="middle" dominant-baseline="central" font-size="${textSizes[i]||textSizes[0]}" font-weight="${textWeights[i]||400}" fill="${textColors[i]||textColors[0]}">${t}</text>`;
+    });
+  }
+  return rects;
+}
+
+function arrow(x1,y1,x2,y2,label,lx,ly){
+  let s=`<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="#888780" stroke-width="1.5" marker-end="url(#marr)"/>`;
+  if(label) s+=`<text x="${lx}" y="${ly}" text-anchor="middle" font-size="11" fill="#5F5E5A">${label}</text>`;
+  return s;
+}
+
+function svgWrap(h,inner){
+  return `<svg width="100%" viewBox="0 0 680 ${h}" role="img" style="font-family:var(--font-sans)">
+<defs><marker id="marr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M2 1L8 5L2 9" fill="none" stroke="#888780" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></marker></defs>
+${inner}</svg>`;
+}
+
+function phase0(y){
+  const ystr=y??"?";
+  const diag=svgWrap(130,
+    box(20,40,180,50,"#E6F1FB","#185FA5",["Source code","int year="+ystr+";"],[12,11],[500,400],["#0C447C","#185FA5"])
+    +arrow(200,65,258,65,"reads",229,57)
+    +box(260,28,180,74,"#EEEDFE","#534AB7",["Scanner","reads char by char","groups into tokens"],[13,11,11],[500,400,400],["#26215C","#534AB7","#534AB7"])
+    +arrow(440,65,498,65,"emits",469,57)
+    +box(500,40,160,50,"#EAF3DE","#3B6D11",["Token stream","KW, ID, OP, NUM…"],[13,11],[500,400],["#173404","#3B6D11"])
+  );
+  const code=`<span class="kw">KEYWORD     </span>  int
+<span class="id">IDENTIFIER  </span>  year
+<span class="op">OPERATOR    </span>  =
+<span class="num">INT_LITERAL </span>  ${ystr}
+<span class="cm">PUNCTUATION </span>  ;
+<span class="kw">KEYWORD     </span>  if
+<span class="cm">PUNCTUATION </span>  (
+<span class="id">IDENTIFIER  </span>  year
+<span class="op">OPERATOR    </span>  %
+<span class="num">INT_LITERAL </span>  4
+<span class="op">OPERATOR    </span>  ==
+<span class="num">INT_LITERAL </span>  0
+<span class="cm">PUNCTUATION </span>  )
+<span class="cm">  … (inner if blocks produce same token types)</span>
+<span class="str">STRING_LIT  </span>  "Leap Year\n"
+<span class="str">STRING_LIT  </span>  "Not Leap Year\n"`;
+  const logic=`<strong>What the scanner does:</strong> It reads the source file character by character. When it sees <code>i-n-t</code> followed by whitespace it recognises the keyword <code>int</code>. When it sees <code>2024</code> it reads digits until a non-digit appears and emits an INT_LITERAL token. Whitespace, newlines and comments are silently discarded — they carry no meaning for the compiler.`;
+  return{title:"Phase 1 — Lexical analysis (tokenizer)",desc:"The compiler reads raw source text character by character and groups characters into tokens — the smallest meaningful units. Think of it as splitting a sentence into individual words.",diag,code,codeLabel:"Token stream produced from your code",logic};
+}
+
+function phase1(y){
+  const ystr=y??"?";
+  const diag=svgWrap(170,
+    box(20,60,160,50,"#EAF3DE","#3B6D11",["Token stream"],[13],[500],["#173404"])
+    +arrow(180,85,238,85,"feeds into",209,77)
+    +box(240,38,200,94,"#EEEDFE","#534AB7",["Parser","checks C grammar rules","validates structure","builds tree"],[13,11,11,11],[500,400,400,400],["#26215C","#534AB7","#534AB7","#534AB7"])
+    +arrow(440,85,498,85,"outputs",469,77)
+    +box(500,60,160,50,"#E6F1FB","#185FA5",["AST root","FunctionDef: main()"],[13,11],[500,400],["#0C447C","#185FA5"])
+  );
+  const code=`<span class="cm">TranslationUnit</span>
+└─ <span class="kw">FunctionDef</span>: main()
+   └─ <span class="kw">CompoundStmt</span>
+      ├─ <span class="kw">DeclStmt</span>   →  <span class="id">int year</span> = <span class="num">${ystr}</span>
+      └─ <span class="kw">IfStmt</span>
+         ├─ Condition : <span class="id">year</span> <span class="op">%</span> <span class="num">4</span> <span class="op">==</span> <span class="num">0</span>
+         ├─ Then  ──►  <span class="kw">IfStmt</span>
+         │    ├─ Condition : <span class="id">year</span> <span class="op">%</span> <span class="num">100</span> <span class="op">==</span> <span class="num">0</span>
+         │    ├─ Then  ──►  <span class="kw">IfStmt</span>
+         │    │    ├─ Condition : <span class="id">year</span> <span class="op">%</span> <span class="num">400</span> <span class="op">==</span> <span class="num">0</span>
+         │    │    ├─ Then  ──►  <span class="str">printf("Leap Year\n")</span>
+         │    │    └─ Else  ──►  <span class="str">printf("Not Leap Year\n")</span>
+         │    └─ Else  ──►  <span class="str">printf("Leap Year\n")</span>
+         └─ Else  ──►  <span class="str">printf("Not Leap Year\n")</span>`;
+  const logic=`<strong>What is an AST?</strong> An Abstract Syntax Tree mirrors the <em>logical structure</em> of your code as a tree. The root is the whole program. Each branch is a statement or expression. The parser checks C grammar rules — if your braces didn't match or if/else was malformed, it would throw a <em>syntax error</em> here and stop. The tree preserves nesting: the deepest IfStmt (÷400 check) is a child of the middle IfStmt (÷100 check), which is a child of the outer IfStmt (÷4 check).`;
+  return{title:"Phase 2 — Syntax analysis (parser / AST builder)",desc:"Tokens are fed into a parser. It verifies the token sequence follows C grammar rules, then builds an Abstract Syntax Tree (AST) — a tree that captures the exact logical structure of your program.",diag,code,codeLabel:"Abstract Syntax Tree (AST)",logic};
+}
+
+function phase2(y){
+  const ystr=y??"?";
+  const diag=svgWrap(170,
+    box(20,60,130,50,"#E6F1FB","#185FA5",["AST"],[13],[500],["#0C447C"])
+    +arrow(150,85,208,85,"",179,77)
+    +box(210,28,220,114,"#EEEDFE","#534AB7",["Semantic analyser","checks types","checks scopes","builds symbol table","verifies signatures"],[13,11,11,11,11],[500,400,400,400,400],["#26215C","#534AB7","#534AB7","#534AB7","#534AB7"])
+    +arrow(430,85,488,85,"",459,77)
+    +box(490,60,170,50,"#EAF3DE","#3B6D11",["Annotated AST","types confirmed"],[13,11],[500,400],["#173404","#3B6D11"])
+  );
+  const code=`Symbol table:
+  <span class="kw">year</span>   type: <span class="id">int</span>   scope: main()   init: <span class="num">${ystr}</span>
+  <span class="kw">main</span>   type: <span class="id">int()</span>  scope: global
+
+Type checks:
+  <span class="id">year</span> <span class="op">%</span> <span class="num">4</span>     →  int <span class="op">%</span> int   =  int    <span class="ok">✓ valid</span>
+  result <span class="op">==</span> <span class="num">0</span>  →  int <span class="op">==</span> int  =  bool   <span class="ok">✓ valid</span>
+  printf(…)    →  (const char*, …)     <span class="ok">✓ valid</span>
+
+Scope checks:
+  year declared before first use        <span class="ok">✓</span>
+  all variables live inside main()      <span class="ok">✓</span>
+  return type matches function sig int  <span class="ok">✓</span>
+
+No semantic errors found.  AST annotated and passed forward.`;
+  const logic=`<strong>Why does this phase exist?</strong> The parser only checks <em>structure</em>. The semantic analyser checks <em>meaning</em>. It would catch: using a variable before declaring it, passing a string where an int is expected, calling a function with the wrong number of arguments, or returning void from an int function. Here all checks pass and the annotated AST moves to phase 4.`;
+  return{title:"Phase 3 — Semantic analysis (type checker)",desc:"The compiler checks that your code actually makes sense — are types compatible, is every variable declared before use, do function signatures match? A symbol table records all identifiers. Errors here are called semantic errors.",diag,code,codeLabel:"Symbol table and type-check report",logic};
+}
+
+function phase3(y){
+  const ystr=y??"?";
+  const diag=svgWrap(130,
+    box(20,40,160,50,"#EAF3DE","#3B6D11",["Annotated AST"],[13],[500],["#173404"])
+    +arrow(180,65,238,65,"flattens",209,57)
+    +box(240,28,200,74,"#EEEDFE","#534AB7",["IR generator","lowers tree to flat code","one operation per line"],[13,11,11],[500,400,400],["#26215C","#534AB7","#534AB7"])
+    +arrow(440,65,498,65,"emits",469,57)
+    +box(500,40,160,50,"#FAEEDA","#854F0B",["3-address IR","machine-independent"],[13,11],[500,400],["#412402","#854F0B"])
+  );
+  const code=`<span class="cm">; Three-address code — max 3 operands per instruction</span>
+<span class="cm">; Temporaries t1…t6 hold intermediate results</span>
+
+t1  =  <span class="num">${ystr}</span>  <span class="op">%</span>  <span class="num">4</span>               <span class="cm">; compute year mod 4</span>
+t2  =  t1  <span class="op">==</span>  <span class="num">0</span>              <span class="cm">; is it zero?</span>
+<span class="kw">if</span>  t2 == false  <span class="kw">goto</span>  L_NOT_1  <span class="cm">; no → not leap</span>
+
+t3  =  <span class="num">${ystr}</span>  <span class="op">%</span>  <span class="num">100</span>             <span class="cm">; compute year mod 100</span>
+t4  =  t3  <span class="op">==</span>  <span class="num">0</span>              <span class="cm">; is it zero?</span>
+<span class="kw">if</span>  t4 == false  <span class="kw">goto</span>  L_LEAP_2 <span class="cm">; no → leap (div by 4 not 100)</span>
+
+t5  =  <span class="num">${ystr}</span>  <span class="op">%</span>  <span class="num">400</span>             <span class="cm">; compute year mod 400</span>
+t6  =  t5  <span class="op">==</span>  <span class="num">0</span>              <span class="cm">; is it zero?</span>
+<span class="kw">if</span>  t6 == false  <span class="kw">goto</span>  L_NOT_2  <span class="cm">; no → not leap</span>
+
+      param  <span class="str">"Leap Year\n"</span>  ;  goto L_END
+<span class="id">L_NOT_2</span>:  param  <span class="str">"Not Leap Year\n"</span>  ;  goto L_END
+<span class="id">L_LEAP_2</span>: param  <span class="str">"Leap Year\n"</span>  ;  goto L_END
+<span class="id">L_NOT_1</span>:  param  <span class="str">"Not Leap Year\n"</span>
+      call   printf
+<span class="id">L_END</span>:    return <span class="num">0</span>`;
+  const logic=`<strong>Why IR?</strong> The AST is tree-shaped and hard to optimise directly. Three-address IR is flat — one operation per line, at most 3 operands. It is <em>machine-independent</em>, so the same IR can target x86, ARM, or any CPU. The nested if/else tree becomes a flat list of conditional jumps (<code>goto</code> labels). Phase 5 works entirely on this flat list.`;
+  return{title:"Phase 4 — Intermediate code generation (3-address IR)",desc:"The annotated AST is lowered to a flat, machine-independent Intermediate Representation (IR). Each line has at most 3 operands. The nested if/else tree becomes a linear sequence of conditional jumps to labels.",diag,code,codeLabel:"Three-address IR instructions",logic};
+}
+
+function phase4(y){
+  let diag,code,logic;
+  if(y===null){
+    diag=svgWrap(100,box(210,25,260,50,"#E6F1FB","#185FA5",["Enter a year above","to see live constant folding"],[13,11],[500,400],["#0C447C","#185FA5"]));
+    code=`<span class="cm">Enter a year above to see the optimisation trace.</span>`;
+    logic=`<strong>Constant folding</strong> evaluates expressions whose values are known at compile time. <strong>Dead code elimination</strong> removes branches that can never execute. Together they can reduce this 3-level nested if program to a single print statement.`;
+  } else {
+    const r4=y%4,r100=y%100,r400=y%400;
+    const t4=r4===0,t100=r100===0,t400=r400===0;
+    const leap=isLeap(y);
+    const result=leap?"Leap Year":"Not Leap Year";
+    const GRN="#EAF3DE",GRNs="#3B6D11",GRNt="#173404";
+    const RED="#FCEBEB",REDs="#A32D2D",REDt="#791F1F";
+    const GRY="#F1EFE8",GRYs="#5F5E5A",GRYt="#2C2C2A";
+    const b1f=t4?GRN:RED, b1s=t4?GRNs:REDs, b1t=t4?GRNt:REDt;
+    const b2f=t4?(t100?RED:GRN):GRY, b2s=t4?(t100?REDs:GRNs):GRYs, b2t=t4?(t100?REDt:GRNt):GRYt;
+    const b3f=(t4&&t100)?(t400?GRN:RED):GRY, b3s=(t4&&t100)?(t400?GRNs:REDs):GRYs, b3t=(t4&&t100)?(t400?GRNt:REDt):GRYt;
+    const rf=leap?GRN:RED, rs=leap?GRNs:REDs, rt=leap?GRNt:REDt;
+    const b2label=t4?(t100?"÷100 TRUE":"÷100 FALSE"):"(skipped)";
+    const b3label=(t4&&t100)?(t400?"÷400 TRUE":"÷400 FALSE"):"(skipped)";
+    diag=svgWrap(200,
+      box(20,20,148,60,b1f,b1s,[`${y} % 4 = ${r4}`,t4?"TRUE — continue":"FALSE — not leap"],[12,11],[500,400],[b1t,b1s])
+      +(t4?`<line x1="168" y1="50" x2="226" y2="50" stroke="${GRNs}" stroke-width="1.5" marker-end="url(#marr)"/>`:
+           `<line x1="168" y1="50" x2="490" y2="130" stroke="${REDs}" stroke-width="1.5" marker-end="url(#marr)" fill="none"/>`)
+      +(t4?arrow(168,50,226,50,"true",196,43):"")
+      +box(228,20,148,60,b2f,b2s,[`${y} % 100 = ${r100}`,b2label],[12,11],[500,400],[b2t,b2s])
+      +(t4&&!t100?`<line x1="376" y1="50" x2="490" y2="130" stroke="${GRNs}" stroke-width="1.5" marker-end="url(#marr)" fill="none"/>`:"")
+      +(t4&&t100?`<line x1="376" y1="50" x2="434" y2="50" stroke="${REDs}" stroke-width="1.5" marker-end="url(#marr)"/>`:"")
+      +box(436,20,148,60,b3f,b3s,[`${y} % 400 = ${r400}`,b3label],[12,11],[500,400],[b3t,b3s])
+      +(t4&&t100?`<line x1="510" y1="80" x2="510" y2="120" stroke="${t400?GRNs:REDs}" stroke-width="1.5" marker-end="url(#marr)" fill="none"/>`:"")
+      +box(436,130,148,50,rf,rs,[`Result: "${result}"`],[12],[500],[rt])
+      +(!t4?box(436,130,148,50,RED,REDs,[`Result: "Not Leap Year"`],[12],[500],[REDt]):"")
+      +(t4&&!t100?box(436,130,148,50,GRN,GRNs,[`Result: "Leap Year"`],[12],[500],[GRNt]):"")
+    );
+    code=`Constant folding  (year = <span class="num">${y}</span>):
+
+  <span class="num">${y}</span> % <span class="num">4</span>   = <span class="num">${r4}</span>  → <span class="${t4?"ok":"bad"}">${t4?"TRUE  — proceed to ÷100 check":"FALSE — immediately NOT a leap year"}</span>
+${t4?`  <span class="num">${y}</span> % <span class="num">100</span> = <span class="num">${r100}</span>  → <span class="${!t100?"ok":"bad"}">${!t100?"FALSE — leap year (divisible by 4, not by 100)":"TRUE  — proceed to ÷400 check"}</span>`:`  <span class="cm">  ÷100 check — dead branch, never reached</span>`}
+${t4&&t100?`  <span class="num">${y}</span> % <span class="num">400</span> = <span class="num">${r400}</span>  → <span class="${t400?"ok":"bad"}">${t400?"TRUE  — leap year (divisible by 400)":"FALSE — NOT a leap year"}</span>`:`  <span class="cm">  ÷400 check — dead branch, never reached</span>`}
+
+Dead branch elimination:
+  All 4 printf branches reduced to 1 live call.
+
+Optimised IR (entire program reduced to):
+  param  <span class="str">"${result}\n"</span>
+  call   printf
+  return <span class="num">0</span>`;
+    logic=`<strong>Constant folding:</strong> Because <code>year = ${y}</code> is a compile-time constant, every modulo expression is computed <em>now</em> by the compiler — the CPU will never compute them at runtime. <strong>Dead code elimination:</strong> Once all conditions are known, the branches that can never execute are cut entirely. The entire 3-nested-if program collapses to a single <code>printf</code> call.`;
+  }
+  return{title:"Phase 5 — Optimisation (constant folding + dead code elimination)",desc:"Because year is a compile-time constant, every arithmetic expression can be evaluated right now. All unreachable branches are eliminated. The entire nested program collapses to one print statement.",diag,code,codeLabel:"Optimisation trace",logic};
+}
+
+function phase5(y){
+  const ystr=y??"?";
+  const leap=y!==null?isLeap(y):null;
+  const result=leap===null?"<result>":leap?"Leap Year":"Not Leap Year";
+  const diag=svgWrap(130,
+    box(20,40,150,50,"#FAEEDA","#854F0B",["Optimised IR"],[13],[500],["#412402"])
+    +arrow(170,65,228,65,"lower to asm",199,57)
+    +box(230,28,200,74,"#EEEDFE","#534AB7",["Code generator","register allocation","emit x86-64 instructions"],[13,11,11],[500,400,400],["#26215C","#534AB7","#534AB7"])
+    +arrow(430,65,488,65,"produces",459,57)
+    +box(490,40,170,50,"#E1F5EE","#0F6E56",["x86-64 assembly","→ binary a.out"],[13,11],[500,400],["#04342C","#0F6E56"])
+  );
+  const code=`<span class="cm">; x86-64 GNU Assembly — Linux System V ABI</span>
+
+<span class="kw">section</span> .data
+  msg  <span class="id">db</span>  <span class="str">"${result}"</span>, 10, 0  <span class="cm">; string + newline (10) + null terminator (0)</span>
+
+<span class="kw">section</span> .text
+<span class="kw">global</span>  main
+<span class="id">main</span>:
+    push    rbp             <span class="cm">; save caller's base pointer onto stack</span>
+    mov     rbp, rsp        <span class="cm">; set our base pointer = current stack top</span>
+    sub     rsp, 16         <span class="cm">; reserve 16 bytes (ABI requires 16-byte alignment)</span>
+
+    <span class="cm">; year = ${ystr} was a constant — optimised away entirely</span>
+    <span class="cm">; all if/else branches folded — single printf call below</span>
+
+    lea     rdi, [rel msg]  <span class="cm">; rdi = address of msg  (1st arg per Linux ABI)</span>
+    xor     eax, eax        <span class="cm">; eax = 0  (signals: 0 float/vector args to printf)</span>
+    call    printf          <span class="cm">; call C library printf → prints "${result}"</span>
+
+    xor     eax, eax        <span class="cm">; set return value = 0  (success)</span>
+    pop     rbp             <span class="cm">; restore caller's base pointer</span>
+    ret                     <span class="cm">; return to OS (exit code 0)</span>
+
+<span class="cm">; Assembler → .o object file</span>
+<span class="cm">; Linker resolves printf → libc, produces binary a.out (~8 KB)</span>
+<span class="cm">; Sections:  .text (machine code)  .data (strings)  .bss (uninit vars)</span>`;
+  const logic=`<strong>Register assignment:</strong> The x86-64 Linux ABI says the first function argument goes in register <code>rdi</code>. So <code>param "${result}"</code> from IR becomes <code>lea rdi, [rel msg]</code>. <strong>Stack frame:</strong> <code>push rbp / mov rbp,rsp / sub rsp,16</code> is boilerplate required by the calling convention so the OS can unwind the stack on exit. <strong>Assembler + Linker:</strong> The text assembly is turned into binary machine code (.o file), then the linker resolves <code>printf</code> to the C standard library, producing the final executable.`;
+  return{title:"Phase 6 — Code generation (x86-64 assembly)",desc:"The optimised IR is translated into actual x86-64 machine instructions. Registers are assigned following the Linux ABI calling convention. The assembler converts text assembly to binary; the linker resolves printf and produces the executable.",diag,code,codeLabel:"x86-64 assembly output (annotated)",logic};
+}
+
+const BUILDERS=[phase0,phase1,phase2,phase3,phase4,phase5];
+
+function renderCard(){
+  const p=BUILDERS[cur](yr);
+  document.getElementById('pcard').innerHTML=`
+    <div class="phase-header"><div class="phase-title">${p.title}</div><div class="phase-desc">${p.desc}</div></div>
+    <div class="phase-body">
+      <div class="section-label">Flow diagram</div>
+      <div class="diagram-wrap">${p.diag}</div>
+      <div class="section-label">${p.codeLabel}</div>
+      <div class="code-block">${p.code}</div>
+      <div class="section-label">Logic explained</div>
+      <div class="logic-box">${p.logic}</div>
+    </div>`;
+  document.getElementById('sctr').textContent=`Phase ${cur+1} of 6`;
+  document.getElementById('pbtn').disabled=cur===0;
+  document.getElementById('nbtn').disabled=cur===5;
+}
+
+function jump(i){cur=i;renderPbar();renderCard()}
+function go(d){jump(Math.max(0,Math.min(5,cur+d)))}
+
+function onInput(){
+  const v=parseInt(document.getElementById('yrinput').value,10);
+  yr=(!isNaN(v)&&v>=1&&v<=9999)?v:null;
+  renderPill();renderCard();
+}
+
+function compile(){
+  const v=parseInt(document.getElementById('yrinput').value,10);
+  if(isNaN(v)||v<1||v>9999){document.getElementById('rpill').innerHTML='<span class="result-pill r-no">Enter a valid year (1–9999)</span>';return}
+  yr=v;renderPill();renderPbar();renderCard();
+}
+
+renderPbar();renderCard();renderPill();
+</script>
